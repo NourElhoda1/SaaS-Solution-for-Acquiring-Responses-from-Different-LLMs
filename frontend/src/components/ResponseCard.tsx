@@ -15,6 +15,16 @@ const ResponseCard: React.FC<ResponseCardProps> = ({ response, onRate, currentRa
   const [feedback, setFeedback] = useState('');
   const [hoveredStar, setHoveredStar] = useState(0);
 
+  // Fonction pour déterminer le rôle du modèle selon son nom
+  const getModelRole = (modelName: string) => {
+  const name = modelName.toLowerCase();
+  if (name.includes('coder') || name.includes('devstral') || name.includes('trinity')) return 'Expert Code';
+  if (name.includes('r1') || name.includes('step') || name.includes('thinking')) return 'Raisonnement';
+  if (name.includes('70b') || name.includes('120b') || name.includes('mimo')) return 'Haute Capacité';
+  if (name.includes('air') || name.includes('mini') || name.includes('3b')) return 'Rapide / Léger';
+  return 'Généraliste';
+};
+
   const handleRatingSubmit = () => {
     if (onRate && rating > 0) {
       onRate(rating, feedback.trim() || undefined);
@@ -40,12 +50,18 @@ const ResponseCard: React.FC<ResponseCardProps> = ({ response, onRate, currentRa
     return 'bg-gray-100 text-gray-800';
   };
 
-  return (
+return (
     <div className={`card slide-in ${!response.success ? 'border-2 border-red-200' : ''}`}>
       {/* Header */}
       <div className="flex items-start justify-between mb-4">
         <div className="flex-1">
-          <h3 className="text-lg font-semibold text-gray-900">
+          <div className="flex justify-between items-center mb-2">
+            {/* Badge de rôle ajouté ici */}
+            <span className="px-2 py-1 bg-indigo-100 text-indigo-800 text-[10px] font-bold uppercase rounded-md tracking-wider">
+              {getModelRole(response.model_name)}
+            </span>
+          </div>
+          <h3 className="text-lg font-bold text-gray-900">
             {getModelDisplayName(response.model_name)}
           </h3>
           <div className="flex items-center gap-2 mt-2">
@@ -75,7 +91,7 @@ const ResponseCard: React.FC<ResponseCardProps> = ({ response, onRate, currentRa
       <div className="mb-4">
         {response.success ? (
           <div className="prose prose-sm max-w-none">
-            <ReactMarkdown className="markdown-content text-gray-700 leading-relaxed">
+            <ReactMarkdown className="markdown-content text-gray-700 leading-relaxed bg-gray-50 p-4 rounded-lg border border-gray-100">
               {response.content}
             </ReactMarkdown>
           </div>

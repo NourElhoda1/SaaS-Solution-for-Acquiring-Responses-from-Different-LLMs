@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, EmailStr
 from typing import Optional, List, Dict, Any
 from datetime import datetime
 from enum import Enum
@@ -25,6 +25,14 @@ class ModelProvider(str, Enum):
     # Phi-3 Mini (Microsoft, petit et gratuit)
     MICROSOFT_PHI = "microsoft/phi-3-mini-128k-instruct:free"
 
+    META_LLAMA_3_3 = "meta-llama/llama-3.3-70b-instruct:free"
+    ARCEE_TRINITY = "arcee-ai/trinity-large-preview:free"
+    OPENAI_GPT_OSS = "openai/gpt-oss-120b:free"
+    STEPFUN_FLASH = "stepfun/step-3-5-flash:free"
+    MISTRAL_DEVSTRAL = "mistralai/devstral-2-2512:free"
+    XIAOMI_MIMO = "xiaomi/mimo-v2-flash:free"
+    GLM_4_5_AIR = "z-ai/glm-4.5-air:free"
+
     
 class QueryRequest(BaseModel):
     """Request model for submitting a query"""
@@ -37,6 +45,7 @@ class QueryRequest(BaseModel):
 
 class LLMResponse(BaseModel):
     """Response from a single LLM"""
+    model_config = {"protected_namespaces": ()}
     model_name: str
     content: str
     tokens_used: Optional[int] = None
@@ -80,3 +89,27 @@ class HistoryQuery(BaseModel):
     models_used: List[str]
     created_at: datetime
     has_ratings: bool
+
+
+class User(BaseModel):
+    """Modèle utilisateur pour la base de données"""
+    username: str
+    email: EmailStr
+    hashed_password: str
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+class UserRegister(BaseModel):
+    """Requête d'inscription"""
+    username: str = Field(..., min_length=3)
+    email: EmailStr
+    password: str = Field(..., min_length=6)
+
+class UserLogin(BaseModel):
+    """Requête de connexion"""
+    email: EmailStr
+    password: str
+
+class Token(BaseModel):
+    """Modèle de réponse pour le token"""
+    access_token: str
+    token_type: str

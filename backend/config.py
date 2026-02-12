@@ -1,3 +1,4 @@
+import os
 from pydantic_settings import BaseSettings
 from typing import List
 
@@ -17,6 +18,9 @@ class Settings(BaseSettings):
     APP_NAME: str = "SaaS Solution for Acquiring Responses from Different LLMs"
     APP_VERSION: str = "1.0.0"
     ALLOWED_ORIGINS: str = "http://localhost:3000,http://localhost:5173"
+    
+    #JWT
+    JWT_SECRET_KEY: str = os.getenv("JWT_SECRET_KEY", "fallback_secret_for_dev")
     
     @property
     def allowed_origins_list(self) -> List[str]:
