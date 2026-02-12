@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, status
+from fastapi import FastAPI, HTTPException, status, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 from datetime import datetime
@@ -8,7 +8,14 @@ import logging
 
 from config import settings
 from database import mongodb
+from auth_utils import (
+    hash_password, 
+    verify_password, 
+    create_access_token, 
+    get_current_user
+)
 from models import (
+    UserRegister, UserLogin, Token,
     QueryRequest, QueryResponse, RatingRequest,
     ModelStats, HistoryQuery, LLMResponse
 )
@@ -49,6 +56,112 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# --- ROUTES AUTHENTIFICATION ---
+
+@app.post("/api/auth/register", status_code=status.HTTP_201_CREATED)
+async def register(user_data: UserRegister):
+    existing_user = await mongodb.db.users.find_one({"email": user_data.email})
+    if existing_user:
+        raise HTTPException(status_code=400, detail="Cet email est déjà utilisé.")
+    
+    new_user = {
+        "username": user_data.username,
+        "email": user_data.email,
+        "hashed_password": hash_password(user_data.password),
+        "created_at": datetime.utcnow()
+    }
+    await mongodb.db.users.insert_one(new_user)
+    return {"message": "Utilisateur créé avec succès"}
+
+@app.post("/api/auth/login", response_model=Token)
+async def login(credentials: UserLogin):
+    user = await mongodb.db.users.find_one({"email": credentials.email})
+    
+    # Vérification de l'utilisateur et du mot de passe
+    if not user:
+        raise HTTPException(status_code=401, detail="Utilisateur non trouvé")
+        
+    if not verify_password(credentials.password, user["hashed_password"]):
+        raise HTTPException(status_code=401, detail="Mot de passe incorrect")
+    
+    access_token = create_access_token(data={"sub": user["email"]})
+    return {"access_token": access_token, "token_type": "bearer"}
+
+# --- ROUTES PROTÉGÉES (Nécessitent une connexion) ---
+
+@app.post("/api/query", response_model=QueryResponse)
+async def submit_query(
+    request: QueryRequest, 
+    current_user: dict = Depends(get_current_user) 
+):
+    try:
+        query_id = str(uuid.uuid4())
+        start_time = datetime.utcnow()
+        
+        responses = await openrouter_service.query_multiple_models(
+            models=request.models,
+            prompt=request.prompt,
+            temperature=request.temperature,
+            max_tokens=request.max_tokens
+        )
+        
+        end_time = datetime.utcnow()
+        total_time = (end_time - start_time).total_seconds()
+        
+        # Sauvegarde liée à l'ID réel de l'utilisateur connecté
+        query_doc = {
+            "_id": query_id,
+            "prompt": request.prompt,
+            "models": [model.value for model in request.models],
+            "user_id": current_user["id"],
+            "temperature": request.temperature,
+            "max_tokens": request.max_tokens,
+            "created_at": start_time,
+            "total_response_time": total_time
+        }
+        await mongodb.db.queries.insert_one(query_doc)
+        
+        # (Sauvegarde des réponses - identique à votre code)
+        for response in responses:
+            await mongodb.db.responses.insert_one({
+                "_id": str(uuid.uuid4()),
+                "query_id": query_id,
+                "model_name": response.model_name,
+                "content": response.content,
+                "success": response.success,
+                "created_at": start_time
+            })
+        
+        return QueryResponse(
+            query_id=query_id,
+            prompt=request.prompt,
+            responses=responses,
+            created_at=start_time,
+            total_response_time=total_time
+        )
+    except Exception as e:
+        logger.error(f"Query error: {e}")
+        raise HTTPException(status_code=500, detail="Erreur interne du serveur")
+
+@app.get("/api/history", response_model=List[HistoryQuery])
+async def get_history(
+    current_user: dict = Depends(get_current_user), 
+    limit: int = 50
+):
+    """Récupère uniquement l'historique de l'utilisateur connecté"""
+    cursor = mongodb.db.queries.find({"user_id": current_user["id"]}).sort("created_at", -1).limit(limit)
+    queries = await cursor.to_list(length=limit)
+    
+    history = []
+    for q in queries:
+        history.append(HistoryQuery(
+            query_id=q["_id"],
+            prompt=q["prompt"],
+            models_used=q["models"],
+            created_at=q["created_at"],
+            has_ratings=False
+        ))
+    return history
 
 @app.get("/")
 async def root():

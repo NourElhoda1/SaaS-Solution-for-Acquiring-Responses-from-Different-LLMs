@@ -9,6 +9,14 @@ const apiClient = axios.create({
   },
 });
 
+apiClient.interceptors.request.use((config) => {
+  const token = localStorage.getItem('token');
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  return config;
+});
+
 // Types
 export interface QueryRequest {
   prompt: string;
@@ -60,8 +68,33 @@ export interface ModelStats {
   total_tokens_used: number;
 }
 
+//  NOUVEAUX TYPES AUTH 
+export interface AuthResponse {
+  access_token: string;
+  token_type: string;
+}
+
 // API Functions
 export const api = {
+  // FONCTIONS AUTHENTIFICATION
+  register: async (username: string, email: string, password: string) => {
+    const response = await apiClient.post('/api/auth/register', { username, email, password });
+    return response.data;
+  },
+
+  login: async (email: string, password: string): Promise<AuthResponse> => {
+    const response = await apiClient.post('/api/auth/login', { email, password });
+    if (response.data.access_token) {
+      localStorage.setItem('token', response.data.access_token);
+    }
+    return response.data;
+  },
+
+  logout: () => {
+    localStorage.removeItem('token');
+    window.location.href = '/login';
+  },
+
   // Health check
   healthCheck: async () => {
     const response = await apiClient.get('/health');

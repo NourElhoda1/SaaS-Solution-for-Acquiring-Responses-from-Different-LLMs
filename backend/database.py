@@ -43,6 +43,11 @@ class MongoDB:
         # Index for ratings collection
         await self.db.ratings.create_index([("query_id", 1), ("response_id", 1)])
         
+        # Index unique pour les utilisateurs
+        await self.db.users.create_index("email", unique=True)
+        await self.db.users.create_index("username", unique=True)
+        logger.info("MongoDB indexes for users created successfully")
+        
         logger.info("MongoDB indexes created successfully")
     
     async def close(self):
